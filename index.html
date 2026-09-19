@@ -130,7 +130,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.9</button>
+    <button id="btnVersion" type="button">v3.0</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -206,8 +206,9 @@
 </dialog>
 
 <script>
-const VERSION = "2.9";
+const VERSION = "3.0";
 const HISTORIQUE = [
+  ["3.0", "19/09/2026", "Dans la fiche d'un script, le bouton « Rafraîchir » devient « Actualiser l'état », et l'heure de la dernière lecture est affichée sous la pastille : on distingue ainsi un état constaté à l'instant d'un affichage vieux de plusieurs minutes."],
   ["2.9", "19/09/2026", "Message dédié quand le serveur bloque l'adresse après plusieurs jetons refusés (code 429) : il indique le délai avant le prochain essai. L'adresse du serveur n'est plus joignable que depuis le tailnet."],
   ["2.8", "19/09/2026", "La fiche d'un fichier .py montre son état sur l'iMac : vert s'il tourne (avec ses PID), orange s'il est présent mais à l'arrêt, et un bouton Lancer ou Arrêter selon le cas. Les scripts ressemblant à un serveur sont signalés comme tels."],
   ["2.7", "19/09/2026", "Retour au jeton transmis dans un en-tête, qui le garde hors des URL, de l'historique et des journaux ; repli automatique sur le paramètre si la requête échoue. Le relais privé iCloud est désormais cité en tête des vérifications : actif, il bloque Safari sans toucher aux autres navigateurs."],
@@ -624,9 +625,10 @@ async function etatScript(nom) {
       html += '<div class="barre">' + (d.actif
         ? `<button class="bouton petit rouge" onclick="agirScript('arreter', '${echappe}')">Arrêter</button>`
         : `<button class="bouton petit" onclick="agirScript('lancer', '${echappe}')">Lancer</button>`)
-        + `<button class="bouton secondaire petit" onclick="etatScript('${echappe}')">Rafraîchir</button></div>`;
+        + `<button class="bouton secondaire petit" onclick="etatScript('${echappe}')">Actualiser l'état</button></div>`;
     }
-    if (d.journal) html += `<p class="aide">Journal : ${echapper(d.journal)}</p>`;
+    html += `<p class="aide">État lu à ${heure()}.` 
+      + (d.journal ? ` Journal : ${echapper(d.journal)}` : "") + `</p>`;
     zone.innerHTML = html + "</div>";
   } catch (e) {
     afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), "ko");
