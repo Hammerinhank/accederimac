@@ -82,6 +82,7 @@
   #compteur{margin-top:12px;font-size:.9rem;color:var(--gris);min-height:1.4em}
   .message{margin-top:10px;font-size:.88rem;color:var(--gris)}
   .message.ko{color:var(--rouge)}
+  .message.bien{color:var(--vert)}
   .message b{display:block;margin-bottom:4px}
   .message ul{margin:4px 0 0;padding-left:20px}
   .message li{margin-bottom:3px}
@@ -109,21 +110,24 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.1</button>
+    <button id="btnVersion" type="button">v2.3</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
 
   <section class="carte">
-    <h2 class="repli" id="titreServeur"><span>Serveur</span><span id="fleche">▾</span></h2>
+    <h2 class="repli" id="titreServeur"><span>Réglages</span><span id="fleche">▾</span></h2>
     <div id="blocServeur">
       <label for="url">Adresse du script Python</label>
-      <input type="text" id="url" placeholder="https://imactavernier-2.xxxx.ts.net" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input type="text" id="url" placeholder="https://imactavernier-2.tail78c299.ts.net:45679" autocapitalize="off" autocorrect="off" spellcheck="false">
       <label for="token">Jeton d'accès</label>
       <input type="password" id="token" placeholder="le jeton défini dans upload_server.py" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <p class="aide">Ces deux valeurs restent sur cet appareil.</p>
+      <label for="racine">Dossier de dépôt sur l'iMac</label>
+      <input type="text" id="racine" placeholder="/Users/francoistavernier/Desktop" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="aide">Chemin absolu, sur le Bureau de l'iMac ou dans l'un de ses sous-dossiers — rien d'autre n'est accessible. C'est là qu'arrivent les fichiers envoyés. Les trois valeurs restent sur cet appareil.</p>
       <div class="barre">
         <button class="bouton secondaire petit" id="btnTest" type="button">Tester la connexion</button>
+        <button class="bouton secondaire petit" id="btnVerifDossier" type="button">Vérifier le dossier</button>
       </div>
       <div class="message" id="msgServeur"></div>
     </div>
@@ -178,14 +182,15 @@
 </dialog>
 
 <script>
-const VERSION = "2.1";
+const VERSION = "2.3";
 const HISTORIQUE = [
-  ["2.1", "19/09/2026", "Diagnostic détaillé : chaque échec indique la cause probable et la liste des vérifications à faire (script arrêté, tailscale serve inactif, adresse en http bloquée, jeton refusé, route absente, fichier trop gros…), avec l'URL appelée. Bandeau d'état du serveur au chargement de la page."],
-  ["2.0", "19/09/2026", "Choix du dossier de dépôt : navigation dans l'arborescence de l'iMac, création de sous-dossiers, liste du contenu. Un clic sur un fichier affiche tous ses attributs et permet de le télécharger sur l'appareil qui consulte la page."],
+  ["2.3", "19/09/2026", "Acces restreint au Bureau de l’iMac : le dossier de depot et la navigation ne peuvent plus sortir de ~/Desktop, le reste du disque est inatteignable."],
+  ["2.2", "19/09/2026", "Le dossier de dépôt sur l'iMac devient un réglage de la page, à côté de l'adresse et du jeton, avec un bouton « Vérifier le dossier » (existence, droits d'écriture, création à la demande). Diagnostics réécrits pour le serveur en HTTPS direct avec le certificat Tailscale, sans tailscale serve."],
+  ["2.1", "19/09/2026", "Diagnostic détaillé : chaque échec indique la cause probable et la liste des vérifications à faire, avec l'URL appelée. Bandeau d'état du serveur au chargement de la page."],
+  ["2.0", "19/09/2026", "Navigation dans l'arborescence de l'iMac, création de sous-dossiers, liste du contenu. Un clic sur un fichier affiche tous ses attributs et permet de le télécharger sur l'appareil qui consulte la page."],
   ["1.0", "19/09/2026", "Version initiale : réglage du serveur et du jeton (mémorisés localement), test de connexion, sélection ou dépôt de fichiers, envoi un par un avec état et décompte de progression."]
 ];
 
-const PORT_ATTENDU = 45679;
 const $ = id => document.getElementById(id);
 let dossier = localStorage.getItem("upload_dossier") || "";
 let fichiers = [];
@@ -200,8 +205,14 @@ $("btnVersion").onclick = () => $("dlgVersion").showModal();
 // ---- Réglages ------------------------------------------------------------
 $("url").value = localStorage.getItem("upload_url") || "";
 $("token").value = localStorage.getItem("upload_token") || "";
+$("racine").value = localStorage.getItem("upload_racine") || "";
 $("url").oninput = e => localStorage.setItem("upload_url", e.target.value.trim());
 $("token").oninput = e => localStorage.setItem("upload_token", e.target.value.trim());
+$("racine").oninput = e => {
+  localStorage.setItem("upload_racine", e.target.value.trim());
+  dossier = ""; localStorage.setItem("upload_dossier", "");
+  dessinerChemin();
+};
 
 $("titreServeur").onclick = () => {
   const bloc = $("blocServeur");
@@ -212,6 +223,7 @@ $("titreServeur").onclick = () => {
 
 function base() { return ($("url").value || "").trim().replace(/\/+$/, ""); }
 function jeton() { return ($("token").value || "").trim(); }
+function racine() { return ($("racine").value || "").trim(); }
 function entetes() { return { "X-Upload-Token": jeton() }; }
 
 function echapper(t) {
@@ -229,15 +241,13 @@ function poids(o) {
 class Panne extends Error {
   constructor(titre, pistes = [], url = "") {
     super(titre);
-    this.titre = titre;
-    this.pistes = pistes;
-    this.url = url;
+    this.titre = titre; this.pistes = pistes; this.url = url;
   }
 }
 
-function afficher(cible, contenu, erreur = false) {
+function afficher(cible, contenu, classe = "") {
   const e = $(cible);
-  e.className = "message" + (erreur ? " ko" : "");
+  e.className = "message" + (classe ? " " + classe : "");
   if (contenu instanceof Panne) {
     e.innerHTML = `<b>${echapper(contenu.titre)}</b>`
       + (contenu.pistes.length ? "<ul>" + contenu.pistes.map(p => `<li>${p}</li>`).join("") + "</ul>" : "")
@@ -253,9 +263,9 @@ function bandeau(texte, classe = "") {
 }
 
 const VERIFS_RESEAU = [
-  `Le script tourne-t-il sur l'iMac ? <code>./upload_service.sh status</code>`,
-  `Le relais https est-il actif ? <code>tailscale serve status</code> doit montrer le port ${PORT_ATTENDU}`,
-  `L'adresse saisie est-elle exactement celle affichée par cette commande (en <code>https://</code>, sans numéro de port) ?`,
+  `Le script tourne-t-il sur l'iMac ? Sa bannière doit afficher <code>Adresse : https://…:45679</code>`,
+  `Le certificat Tailscale est-il encore valide ? <code>openssl x509 -enddate -noout -in /var/db/tailscale/imactavernier-2.tail78c299.ts.net.crt</code> — il se renouvelle par <code>sudo ~/go/bin/tailscale cert …</code>`,
+  `L'adresse saisie est-elle bien en <code>https://</code>, avec le nom <code>.ts.net</code> et le port <code>:45679</code> ?`,
   `Tailscale est-il connecté sur cet appareil, et l'iMac est-il allumé et non endormi ?`,
   `Dans <code>upload_server.py</code>, la liste <code>ORIGINES</code> contient-elle <code>${location.origin}</code> ?`,
 ];
@@ -263,17 +273,23 @@ const VERIFS_RESEAU = [
 function pannePour(statut, donnees, url) {
   const dit = donnees && donnees.erreur ? donnees.erreur : "";
   switch (statut) {
+    case 400:
+      return new Panne(dit || "Demande refusée (400)", [
+        `Vérifie le champ « Dossier de dépôt » : ce doit être le Bureau de l'iMac (<code>/Users/francoistavernier/Desktop</code>) ou l'un de ses sous-dossiers.`,
+        `Aucun autre emplacement du disque n'est autorisé (réglage <code>RACINES_AUTORISEES</code> du script).`,
+        `S'il n'existe pas encore, utilise « Vérifier le dossier », qui propose de le créer.`,
+      ], url);
     case 403:
       return new Panne("Jeton refusé (403)", [
         `Le serveur répond, mais le jeton ne correspond pas.`,
         `Compare le champ « Jeton d'accès » avec la variable <code>JETON</code> en haut de <code>upload_server.py</code>.`,
-        `Attention aux espaces avant/après et à la correction automatique du clavier.`,
-        `Après modification du script, relance-le : <code>./upload_service.sh stop</code> puis <code>start</code>.`,
+        `Attention aux espaces et à la correction automatique du clavier.`,
+        `Après modification du script, relance-le.`,
       ], url);
     case 404:
       return new Panne(dit ? `Introuvable (404) : ${dit}` : "Adresse inconnue du serveur (404)", [
         `Si c'est un fichier ou un dossier : il a pu être déplacé ou supprimé, clique sur « Actualiser ».`,
-        `Sinon le script Python est sans doute en v1.0 : remplace-le par <code>upload_server.py</code> v2.0 et relance-le.`,
+        `Sinon le script Python est plus ancien que cette page : il faut la v2.3 de <code>upload_server.py</code>.`,
       ], url);
     case 409:
       return new Panne(dit || "Ce dossier existe déjà (409)", [`Choisis un autre nom.`], url);
@@ -297,17 +313,17 @@ function pannePour(statut, donnees, url) {
   }
 }
 
-// Point d'entrée unique de tous les appels : garantit un diagnostic identique partout.
+// Point d'entrée unique de tous les appels : diagnostic identique partout.
 async function appel(chemin, options = {}) {
   if (!base()) {
     throw new Panne("Adresse du serveur non renseignée", [
-      `Ouvre la section « Serveur » et colle l'adresse donnée par <code>tailscale serve status</code> sur l'iMac.`,
+      `Ouvre « Réglages » et saisis <code>https://imactavernier-2.tail78c299.ts.net:45679</code>`,
     ]);
   }
   if (!/^https:\/\//i.test(base())) {
     throw new Panne("L'adresse doit commencer par https://", [
       `Cette page est servie en https : le navigateur bloque tout appel vers <code>http://</code> ou vers une IP Tailscale brute (contenu mixte).`,
-      `Lance <code>tailscale serve --bg ${PORT_ATTENDU}</code> sur l'iMac, puis utilise l'adresse en <code>.ts.net</code> qu'affiche <code>tailscale serve status</code>.`,
+      `Le script écoute déjà en https avec le certificat Tailscale : utilise le nom complet <code>.ts.net</code> suivi de <code>:45679</code>.`,
     ]);
   }
   if (!jeton()) {
@@ -323,7 +339,7 @@ async function appel(chemin, options = {}) {
   } catch (e) {
     console.error("Échec réseau :", e);
     throw new Panne(`Serveur injoignable — ${e.name}: ${e.message}`, VERIFS_RESEAU.concat([
-      `Un blocage CORS produit exactement la même erreur : la console du navigateur le précise.`,
+      `Un certificat expiré ou un blocage CORS produisent la même erreur : la console du navigateur le précise.`,
     ]), url);
   }
 
@@ -335,12 +351,17 @@ async function appel(chemin, options = {}) {
   let d = null;
   try { d = await r.json(); } catch (e) {
     if (r.ok) throw new Panne("Réponse illisible du serveur", [
-      `Le serveur a répondu autre chose que du JSON (page d'erreur de Tailscale ?).`,
-      `Vérifie que l'adresse pointe bien vers le port ${PORT_ATTENDU}.`,
+      `Le serveur a répondu autre chose que du JSON.`,
+      `Vérifie que l'adresse pointe bien vers le port 45679 de l'iMac.`,
     ], url);
   }
   if (!r.ok) throw pannePour(r.status, d, url);
   return d;
+}
+
+function avecRacine(chemin, params = {}) {
+  const q = new URLSearchParams({ racine: racine(), ...params });
+  return chemin + "?" + q.toString();
 }
 
 // ---- État du serveur -----------------------------------------------------
@@ -348,16 +369,23 @@ async function verifier(silencieux = false) {
   bandeau("Vérification du serveur…");
   try {
     const d = await appel("/version");
-    bandeau(`Serveur joignable — script v${d.version}, racine <code>${echapper(d.racine)}</code>`, "ok");
-    if (!silencieux) afficher("msgServeur", `Connexion établie avec le script v${d.version}.`);
-    if (d.version !== VERSION.split(".")[0] + "." + "0" && d.version < "2.0") {
-      bandeau(`Serveur joignable mais script en v${d.version} : la navigation et le téléchargement exigent la v2.0.`, "ko");
+    if (!racine() && d.racine_defaut) {
+      $("racine").value = d.racine_defaut;
+      localStorage.setItem("upload_racine", d.racine_defaut);
+    }
+    bandeau(`Serveur joignable — script v${d.version}`, "ok");
+    if (!silencieux) {
+      afficher("msgServeur", `Connexion établie avec le script v${d.version}. `
+        + `Emplacements autorisés : ${(d.racines_autorisees || []).join(", ")}`, "bien");
+    }
+    if (d.version < "2.3") {
+      bandeau(`Serveur joignable mais script en v${d.version} : le choix du dossier depuis la page exige la v2.3.`, "ko");
     }
     return true;
   } catch (e) {
     const p = e instanceof Panne ? e : new Panne(String(e));
     bandeau(`Serveur indisponible — ${echapper(p.titre)}. Détail ci-dessous.`, "ko");
-    afficher("msgServeur", p, true);
+    afficher("msgServeur", p, "ko");
     $("blocServeur").style.display = "";
     $("fleche").textContent = "▾";
     return false;
@@ -366,11 +394,42 @@ async function verifier(silencieux = false) {
 
 $("btnTest").onclick = async () => { if (await verifier()) charger(); };
 
+$("btnVerifDossier").onclick = async () => {
+  afficher("msgServeur", "Vérification du dossier…");
+  try {
+    let d = await appel(avecRacine("/verifier-racine"));
+    if (!d.existe) {
+      if (!confirm(`Le dossier ${d.racine} n'existe pas.\n\nLe créer maintenant ?`)) {
+        return afficher("msgServeur", `Dossier inexistant : ${d.racine}`, "ko");
+      }
+      d = await appel(avecRacine("/verifier-racine", { creer: "1" }));
+    }
+    if (!d.inscriptible) {
+      return afficher("msgServeur", new Panne(`Dossier en lecture seule : ${d.racine}`, [
+        `Sur l'iMac : <code>chmod u+w "${d.racine}"</code>`,
+        `Ou choisis un autre emplacement.`,
+      ]), "ko");
+    }
+    afficher("msgServeur", `Dossier utilisable : ${d.racine} — ${d.elements} élément(s) à la racine.`, "bien");
+    dossier = ""; localStorage.setItem("upload_dossier", "");
+    charger();
+  } catch (e) {
+    afficher("msgServeur", e instanceof Panne ? e : new Panne(String(e)), "ko");
+  }
+};
+
 // ---- Navigation dans les dossiers ---------------------------------------
+function nomRacine() {
+  const r = racine();
+  if (!r) return "dossier de dépôt";
+  const morceaux = r.replace(/\/+$/, "").split("/");
+  return morceaux[morceaux.length - 1] || r;
+}
+
 function dessinerChemin() {
   const morceaux = dossier ? dossier.split("/") : [];
   let cumul = "";
-  let html = `<a onclick="aller('')">racine</a>`;
+  let html = `<a onclick="aller('')">${echapper(nomRacine())}</a>`;
   for (const m of morceaux) {
     cumul = cumul ? cumul + "/" + m : m;
     html += ` / <a onclick="aller('${cumul.replace(/'/g, "\\'")}')">${echapper(m)}</a>`;
@@ -388,7 +447,7 @@ async function charger() {
   dessinerChemin();
   afficher("msgDossier", "Lecture du dossier…");
   try {
-    const d = await appel("/liste?dossier=" + encodeURIComponent(dossier));
+    const d = await appel(avecRacine("/liste", { dossier }));
     const parent = dossier.includes("/") ? dossier.slice(0, dossier.lastIndexOf("/")) : "";
     let html = "";
     if (dossier) {
@@ -402,10 +461,10 @@ async function charger() {
       html += `<li><span class="nom cliquable" onclick="ouvrir('${f.nom.replace(/'/g, "\\'")}')">${echapper(f.nom)}</span><span class="meta">${poids(f.taille)}</span></li>`;
     }
     $("contenu").innerHTML = html || `<li><span class="nom">Dossier vide</span></li>`;
-    afficher("msgDossier", `${d.nb_dossiers} dossier(s), ${d.nb_fichiers} fichier(s).`);
+    afficher("msgDossier", `${d.nb_dossiers} dossier(s), ${d.nb_fichiers} fichier(s) — ${d.racine}${d.dossier ? "/" + d.dossier : ""}`);
   } catch (e) {
     $("contenu").innerHTML = "";
-    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), "ko");
   }
 }
 
@@ -418,19 +477,18 @@ $("btnNouveau").onclick = async () => {
     const d = await appel("/creer-dossier", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dossier, nom })
+      body: JSON.stringify({ racine: racine(), dossier, nom })
     });
     aller(d.dossier);
   } catch (e) {
-    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), "ko");
   }
 };
 
 // ---- Attributs et téléchargement ----------------------------------------
 async function ouvrir(nom) {
   try {
-    const d = await appel("/infos?dossier=" + encodeURIComponent(dossier)
-      + "&nom=" + encodeURIComponent(nom));
+    const d = await appel(avecRacine("/infos", { dossier, nom }));
     fichierOuvert = nom;
     $("titreFichier").textContent = d.nom;
     const lignes = [
@@ -450,7 +508,7 @@ async function ouvrir(nom) {
     afficher("msgFichier", "");
     $("dlgFichier").showModal();
   } catch (e) {
-    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), "ko");
   }
 }
 
@@ -459,8 +517,7 @@ $("btnTelecharger").onclick = async () => {
   $("btnTelecharger").disabled = true;
   afficher("msgFichier", "Téléchargement en cours…");
   try {
-    const r = await appel("/telecharger?dossier=" + encodeURIComponent(dossier)
-      + "&nom=" + encodeURIComponent(fichierOuvert), { brut: true });
+    const r = await appel(avecRacine("/telecharger", { dossier, nom: fichierOuvert }), { brut: true });
     const blob = await r.blob();
     const lien = document.createElement("a");
     lien.href = URL.createObjectURL(blob);
@@ -469,9 +526,9 @@ $("btnTelecharger").onclick = async () => {
     lien.click();
     lien.remove();
     setTimeout(() => URL.revokeObjectURL(lien.href), 30000);
-    afficher("msgFichier", "Fichier récupéré. Sur iPhone, il est enregistré dans Fichiers ▸ Téléchargements.");
+    afficher("msgFichier", "Fichier récupéré. Sur iPhone, il est enregistré dans Fichiers ▸ Téléchargements.", "bien");
   } catch (e) {
-    afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), true);
+    afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), "ko");
   }
   $("btnTelecharger").disabled = false;
 };
@@ -518,6 +575,7 @@ $("btnEnvoyer").onclick = async () => {
 
     const form = new FormData();
     form.append("fichier", item.fichier);
+    form.append("racine", racine());
     form.append("dossier", dossier);
     try {
       await appel("/upload", { method: "POST", body: form });
@@ -534,8 +592,8 @@ $("btnEnvoyer").onclick = async () => {
   }
 
   $("compteur").textContent = `Terminé : ${envoyes} / ${total} déposé(s)` +
-    (echecs ? `, ${echecs} en échec` : "") + ` dans ${dossier || "racine"}.`;
-  if (derniere) afficher("msgEnvoi", derniere, true);
+    (echecs ? `, ${echecs} en échec` : "") + ` dans ${nomRacine()}${dossier ? "/" + dossier : ""}.`;
+  if (derniere) afficher("msgEnvoi", derniere, "ko");
   $("btnEnvoyer").disabled = false;
   if (envoyes) charger();
 };
