@@ -118,7 +118,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.5</button>
+    <button id="btnVersion" type="button">v2.6</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -193,8 +193,9 @@
 </dialog>
 
 <script>
-const VERSION = "2.5";
+const VERSION = "2.6";
 const HISTORIQUE = [
+  ["2.6", "19/09/2026", "Chaque message et le bandeau d'état sont horodatés (heure, minute, seconde) : on distingue ainsi une erreur qui vient de se produire d'un affichage resté à l'écran depuis une tentative précédente. Le navigateur utilisé est indiqué dans le bandeau."],
   ["2.5", "19/09/2026", "Le jeton voyage en paramètre au lieu d'un en-tête personnalisé : les requêtes deviennent simples au sens CORS, sans contrôle préalable, ce qui débloque Safari sur iPhone. Le jeton est masqué dans les messages d'erreur."],
   ["2.4", "19/09/2026", "Petite icône œil dans le champ du jeton : un appui affiche ou masque sa valeur, pour vérifier une saisie sans la retaper."],
   ["2.3", "19/09/2026", "Acces restreint au Bureau de l’iMac : le dossier de depot et la navigation ne peuvent plus sortir de ~/Desktop, le reste du disque est inatteignable."],
@@ -248,6 +249,19 @@ function jeton() { return ($("token").value || "").trim(); }
 function racine() { return ($("racine").value || "").trim(); }
 function masquer(u) { return String(u).replace(/jeton=[^&]*/, "jeton=***"); }
 
+function heure() {
+  return new Date().toLocaleTimeString("fr-FR", { hour12: false });
+}
+
+function navigateur() {
+  const ua = navigator.userAgent;
+  if (/CriOS/.test(ua)) return "Chrome";
+  if (/FxiOS/.test(ua)) return "Firefox";
+  if (/EdgiOS/.test(ua)) return "Edge";
+  if (/Safari/.test(ua)) return "Safari";
+  return "navigateur inconnu";
+}
+
 function echapper(t) {
   return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
@@ -271,17 +285,17 @@ function afficher(cible, contenu, classe = "") {
   const e = $(cible);
   e.className = "message" + (classe ? " " + classe : "");
   if (contenu instanceof Panne) {
-    e.innerHTML = `<b>${echapper(contenu.titre)}</b>`
+    e.innerHTML = `<b>${heure()} — ${echapper(contenu.titre)}</b>`
       + (contenu.pistes.length ? "<ul>" + contenu.pistes.map(p => `<li>${p}</li>`).join("") + "</ul>" : "")
       + (contenu.url ? `<span class="appel">Appel : ${echapper(contenu.url)}</span>` : "");
   } else {
-    e.textContent = contenu;
+    e.textContent = contenu ? heure() + " — " + contenu : "";
   }
 }
 
 function bandeau(texte, classe = "") {
   $("bandeau").className = classe;
-  $("bandeau").innerHTML = texte;
+  $("bandeau").innerHTML = `${heure()} (${navigateur()}) — ${texte}`;
 }
 
 const VERIFS_RESEAU = [
