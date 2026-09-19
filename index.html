@@ -110,6 +110,18 @@
     font-size:1.1rem;color:var(--gris);border-radius:6px;
   }
   .oeil:hover{background:var(--bleu-clair)}
+  .script-bloc{border-top:1px solid var(--trait);padding-top:14px;margin-bottom:16px}
+  .script-titre{font-size:.85rem;color:var(--gris);margin-bottom:8px}
+  .pastille{
+    display:inline-flex;align-items:center;gap:8px;border-radius:999px;
+    padding:7px 14px;font-size:.9rem;font-weight:600;
+  }
+  .pastille::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor}
+  .pastille.vert{background:var(--vert-clair);color:var(--vert)}
+  .pastille.orange{background:#fdf0e2;color:#9a5b16}
+  .pastille.gris{background:#eef0f4;color:var(--gris)}
+  .bouton.rouge{background:var(--rouge)}
+  .script-pid{font-size:.8rem;color:var(--gris);margin-top:8px;word-break:break-all}
   .aide{font-size:.85rem;color:var(--gris);margin:6px 0 0}
 </style>
 </head>
@@ -118,7 +130,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.7</button>
+    <button id="btnVersion" type="button">v2.9</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -184,6 +196,7 @@
   <div class="modale">
     <h2 id="titreFichier"></h2>
     <table class="attr"><tbody id="attrs"></tbody></table>
+    <div id="script"></div>
     <div class="barre" style="margin-top:0">
       <button class="bouton" id="btnTelecharger" type="button">Télécharger sur cet appareil</button>
       <button class="bouton secondaire" type="button" onclick="document.getElementById('dlgFichier').close()">Fermer</button>
@@ -193,8 +206,10 @@
 </dialog>
 
 <script>
-const VERSION = "2.7";
+const VERSION = "2.9";
 const HISTORIQUE = [
+  ["2.9", "19/09/2026", "Message dédié quand le serveur bloque l'adresse après plusieurs jetons refusés (code 429) : il indique le délai avant le prochain essai. L'adresse du serveur n'est plus joignable que depuis le tailnet."],
+  ["2.8", "19/09/2026", "La fiche d'un fichier .py montre son état sur l'iMac : vert s'il tourne (avec ses PID), orange s'il est présent mais à l'arrêt, et un bouton Lancer ou Arrêter selon le cas. Les scripts ressemblant à un serveur sont signalés comme tels."],
   ["2.7", "19/09/2026", "Retour au jeton transmis dans un en-tête, qui le garde hors des URL, de l'historique et des journaux ; repli automatique sur le paramètre si la requête échoue. Le relais privé iCloud est désormais cité en tête des vérifications : actif, il bloque Safari sans toucher aux autres navigateurs."],
   ["2.6", "19/09/2026", "Chaque message et le bandeau d'état sont horodatés (heure, minute, seconde) : on distingue ainsi une erreur qui vient de se produire d'un affichage resté à l'écran depuis une tentative précédente. Le navigateur utilisé est indiqué dans le bandeau."],
   ["2.5", "19/09/2026", "Le jeton voyage en paramètre au lieu d'un en-tête personnalisé : les requêtes deviennent simples au sens CORS, sans contrôle préalable, ce qui débloque Safari sur iPhone. Le jeton est masqué dans les messages d'erreur."],
@@ -305,7 +320,7 @@ const VERIFS_RESEAU = [
   `<b>Le relais privé iCloud est-il actif ?</b> Réglages ▸ votre nom ▸ iCloud ▸ Relais privé. Il ne s'applique qu'à Safari et fait transiter les requêtes par Apple, qui ignore votre tailnet : Safari échoue alors là où Chrome réussit. Même effet avec Réglages ▸ Safari ▸ Masquer l'adresse IP.`,
   `Le script tourne-t-il sur l'iMac ? Sa bannière doit afficher <code>Adresse : https://…:45679</code>`,
   `Le certificat Tailscale est-il encore valide ? <code>openssl x509 -enddate -noout -in /var/db/tailscale/imactavernier-2.tail78c299.ts.net.crt</code> — il se renouvelle par <code>sudo ~/go/bin/tailscale cert …</code>`,
-  `L'adresse saisie est-elle bien en <code>https://</code>, avec le nom <code>.ts.net</code> et le port <code>:45679</code> ?`,
+  `L'adresse saisie est-elle bien en <code>https://</code>, avec le nom <code>.ts.net</code> et le port <code>:45679</code> ? Depuis la v3.0 du script, une adresse en 192.168.x ou localhost ne répond plus : seul le tailnet est servi.`,
   `Tailscale est-il connecté sur cet appareil, et l'iMac est-il allumé et non endormi ?`,
   `Dans <code>upload_server.py</code>, la liste <code>ORIGINES</code> contient-elle <code>${location.origin}</code> ?`,
 ];
@@ -318,6 +333,12 @@ function pannePour(statut, donnees, url) {
         `Vérifie le champ « Dossier de dépôt » : ce doit être le Bureau de l'iMac (<code>/Users/francoistavernier/Desktop</code>) ou l'un de ses sous-dossiers.`,
         `Aucun autre emplacement du disque n'est autorisé (réglage <code>RACINES_AUTORISEES</code> du script).`,
         `S'il n'existe pas encore, utilise « Vérifier le dossier », qui propose de le créer.`,
+      ], url);
+    case 429:
+      return new Panne(dit || "Trop de tentatives (429)", [
+        `Le serveur a bloqué cette adresse après plusieurs jetons refusés : c'est la protection contre les essais en rafale.`,
+        `Attends le délai indiqué, puis vérifie le jeton avec l'icône ◉ avant de réessayer — chaque nouvel échec double l'attente.`,
+        `La valeur exacte est dans <code>jeton.txt</code>, à côté du script sur l'iMac.`,
       ], url);
     case 403:
       return new Panne("Jeton refusé (403)", [
@@ -567,9 +588,68 @@ async function ouvrir(nom) {
       `<tr><td>${k}</td><td>${echapper(v)}</td></tr>`).join("");
     afficher("msgFichier", "");
     $("dlgFichier").showModal();
+    etatScript(nom);
   } catch (e) {
     afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), "ko");
   }
+}
+
+async function etatScript(nom) {
+  const zone = $("script");
+  zone.innerHTML = "";
+  if (!/\.py$/i.test(nom)) return;
+
+  zone.innerHTML = '<div class="script-bloc"><div class="script-titre">Script Python</div>'
+    + '<span class="pastille gris">Vérification en cours…</span></div>';
+  try {
+    const d = await appel(avecRacine("/script-etat", { dossier, nom }));
+    if (!d.python) { zone.innerHTML = ""; return; }
+
+    const echappe = nom.replace(/'/g, "\\'");
+    let html = '<div class="script-bloc">'
+      + `<div class="script-titre">${d.serveur ? "Serveur Python" : "Script Python"}</div>`;
+
+    if (d.actif) {
+      html += '<span class="pastille vert">En service sur l\'iMac</span>'
+        + `<div class="script-pid">${d.processus.map(p => "PID " + p.pid + " — " + echapper(p.commande)).join("<br>")}</div>`;
+    } else {
+      html += '<span class="pastille orange">Présent sur l\'iMac, à l\'arrêt</span>';
+    }
+
+    if (d.moi) {
+      html += '<p class="aide">C\'est ce serveur qui fait fonctionner la page : il ne peut pas être arrêté d\'ici.</p>';
+    } else if (!d.pilotable) {
+      html += `<p class="aide">${echapper(d.raison || "Script non pilotable depuis la page.")}</p>`;
+    } else {
+      html += '<div class="barre">' + (d.actif
+        ? `<button class="bouton petit rouge" onclick="agirScript('arreter', '${echappe}')">Arrêter</button>`
+        : `<button class="bouton petit" onclick="agirScript('lancer', '${echappe}')">Lancer</button>`)
+        + `<button class="bouton secondaire petit" onclick="etatScript('${echappe}')">Rafraîchir</button></div>`;
+    }
+    if (d.journal) html += `<p class="aide">Journal : ${echapper(d.journal)}</p>`;
+    zone.innerHTML = html + "</div>";
+  } catch (e) {
+    afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), "ko");
+    zone.innerHTML = "";
+  }
+}
+
+async function agirScript(action, nom) {
+  afficher("msgFichier", action === "lancer" ? "Lancement en cours…" : "Arrêt en cours…");
+  const form = new FormData();
+  form.append("racine", racine());
+  form.append("dossier", dossier);
+  form.append("nom", nom);
+  try {
+    const d = await appel("/script-" + (action === "lancer" ? "lancer" : "arreter"),
+                          { method: "POST", body: form });
+    afficher("msgFichier", action === "lancer"
+      ? (d.actif ? "Script lancé." : "Lancé, mais aucun processus détecté — regarde son journal.")
+      : `Arrêté (${d.arretes} processus).`, d.actif === (action === "lancer") ? "bien" : "ko");
+  } catch (e) {
+    afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), "ko");
+  }
+  etatScript(nom);
 }
 
 $("btnTelecharger").onclick = async () => {
