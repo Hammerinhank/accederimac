@@ -102,6 +102,14 @@
   table.attr td{padding:6px 0;border-bottom:1px solid var(--trait);vertical-align:top}
   table.attr td:first-child{color:var(--gris);width:42%;padding-right:10px}
   table.attr td:last-child{word-break:break-all}
+  .champ-oeil{position:relative}
+  .champ-oeil input{padding-right:44px}
+  .oeil{
+    position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    background:none;border:0;padding:6px 8px;cursor:pointer;line-height:1;
+    font-size:1.1rem;color:var(--gris);border-radius:6px;
+  }
+  .oeil:hover{background:var(--bleu-clair)}
   .aide{font-size:.85rem;color:var(--gris);margin:6px 0 0}
 </style>
 </head>
@@ -110,7 +118,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.3</button>
+    <button id="btnVersion" type="button">v2.4</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -121,7 +129,10 @@
       <label for="url">Adresse du script Python</label>
       <input type="text" id="url" placeholder="https://imactavernier-2.tail78c299.ts.net:45679" autocapitalize="off" autocorrect="off" spellcheck="false">
       <label for="token">Jeton d'accès</label>
-      <input type="password" id="token" placeholder="le jeton défini dans upload_server.py" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <div class="champ-oeil">
+        <input type="password" id="token" placeholder="le jeton du fichier jeton.txt" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button class="oeil" id="btnOeil" type="button" aria-label="Afficher le jeton" title="Afficher le jeton">◉</button>
+      </div>
       <label for="racine">Dossier de dépôt sur l'iMac</label>
       <input type="text" id="racine" placeholder="/Users/francoistavernier/Desktop" autocapitalize="off" autocorrect="off" spellcheck="false">
       <p class="aide">Chemin absolu, sur le Bureau de l'iMac ou dans l'un de ses sous-dossiers — rien d'autre n'est accessible. C'est là qu'arrivent les fichiers envoyés. Les trois valeurs restent sur cet appareil.</p>
@@ -182,8 +193,9 @@
 </dialog>
 
 <script>
-const VERSION = "2.3";
+const VERSION = "2.4";
 const HISTORIQUE = [
+  ["2.4", "19/09/2026", "Petite icône œil dans le champ du jeton : un appui affiche ou masque sa valeur, pour vérifier une saisie sans la retaper."],
   ["2.3", "19/09/2026", "Acces restreint au Bureau de l’iMac : le dossier de depot et la navigation ne peuvent plus sortir de ~/Desktop, le reste du disque est inatteignable."],
   ["2.2", "19/09/2026", "Le dossier de dépôt sur l'iMac devient un réglage de la page, à côté de l'adresse et du jeton, avec un bouton « Vérifier le dossier » (existence, droits d'écriture, création à la demande). Diagnostics réécrits pour le serveur en HTTPS direct avec le certificat Tailscale, sans tailscale serve."],
   ["2.1", "19/09/2026", "Diagnostic détaillé : chaque échec indique la cause probable et la liste des vérifications à faire, avec l'URL appelée. Bandeau d'état du serveur au chargement de la page."],
@@ -212,6 +224,15 @@ $("racine").oninput = e => {
   localStorage.setItem("upload_racine", e.target.value.trim());
   dossier = ""; localStorage.setItem("upload_dossier", "");
   dessinerChemin();
+};
+
+$("btnOeil").onclick = () => {
+  const champ = $("token");
+  const cache = champ.type === "password";
+  champ.type = cache ? "text" : "password";
+  $("btnOeil").textContent = cache ? "◎" : "◉";
+  $("btnOeil").title = cache ? "Masquer le jeton" : "Afficher le jeton";
+  $("btnOeil").setAttribute("aria-label", $("btnOeil").title);
 };
 
 $("titreServeur").onclick = () => {
