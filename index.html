@@ -102,6 +102,8 @@
   table.attr td{padding:6px 0;border-bottom:1px solid var(--trait);vertical-align:top}
   table.attr td:first-child{color:var(--gris);width:42%;padding-right:10px}
   table.attr td:last-child{word-break:break-all}
+  /* Masquage sans type="password" : évite la proposition de trousseau iOS */
+  input.masque{-webkit-text-security:disc;text-security:disc}
   .champ-oeil{position:relative}
   .champ-oeil input{padding-right:44px}
   .oeil{
@@ -150,7 +152,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v3.1</button>
+    <button id="btnVersion" type="button">v3.2</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -159,14 +161,16 @@
     <h2 class="repli" id="titreServeur"><span>Réglages</span><span id="fleche">▾</span></h2>
     <div id="blocServeur">
       <label for="url">Adresse du script Python</label>
-      <input type="text" id="url" placeholder="https://imactavernier-2.tail78c299.ts.net:45679" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input type="text" id="url" placeholder="https://imactavernier-2.tail78c299.ts.net:45679" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
       <label for="token">Jeton d'accès</label>
       <div class="champ-oeil">
-        <input type="password" id="token" placeholder="le jeton du fichier jeton.txt" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <input type="text" id="token" class="masque" placeholder="le jeton du fichier jeton.txt"
+               inputmode="text" autocapitalize="off" autocorrect="off" spellcheck="false"
+               autocomplete="off" data-1p-ignore data-lpignore="true">
         <button class="oeil" id="btnOeil" type="button" aria-label="Afficher le jeton" title="Afficher le jeton">◉</button>
       </div>
       <label for="racine">Dossier de dépôt sur l'iMac</label>
-      <input type="text" id="racine" placeholder="/Users/francoistavernier/Desktop" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <input type="text" id="racine" placeholder="/Users/francoistavernier/Desktop" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
       <p class="aide">Chemin absolu, sur le Bureau de l'iMac ou dans l'un de ses sous-dossiers — rien d'autre n'est accessible. C'est là qu'arrivent les fichiers envoyés. Les trois valeurs restent sur cet appareil.</p>
       <div class="barre">
         <button class="bouton secondaire petit" id="btnTest" type="button">Tester la connexion</button>
@@ -233,8 +237,9 @@
 </dialog>
 
 <script>
-const VERSION = "3.1";
+const VERSION = "3.2";
 const HISTORIQUE = [
+  ["3.2", "19/09/2026", "Le champ du jeton n'est plus de type mot de passe : iOS ne propose donc plus de remplir un mot de passe du trousseau à chaque ouverture. Le masquage est fait en CSS et l'icône œil fonctionne comme avant."],
   ["3.1", "19/09/2026", "Fiche d'un fichier repensée pour l'écran d'un iPhone : attributs sur deux colonnes, état du script juste sous le nom, et tous les boutons groupés dans un bandeau fixe en bas qui reste visible quoi qu'il arrive. La ligne de commande du processus passe dans un volet à déplier, rien n'est perdu."],
   ["3.0", "19/09/2026", "Dans la fiche d'un script, le bouton « Rafraîchir » devient « Actualiser l'état », et l'heure de la dernière lecture est affichée sous la pastille : on distingue ainsi un état constaté à l'instant d'un affichage vieux de plusieurs minutes."],
   ["2.9", "19/09/2026", "Message dédié quand le serveur bloque l'adresse après plusieurs jetons refusés (code 429) : il indique le délai avant le prochain essai. L'adresse du serveur n'est plus joignable que depuis le tailnet."],
@@ -276,8 +281,8 @@ $("racine").oninput = e => {
 
 $("btnOeil").onclick = () => {
   const champ = $("token");
-  const cache = champ.type === "password";
-  champ.type = cache ? "text" : "password";
+  const cache = champ.classList.contains("masque");
+  champ.classList.toggle("masque", !cache);
   $("btnOeil").textContent = cache ? "◎" : "◉";
   $("btnOeil").title = cache ? "Masquer le jeton" : "Afficher le jeton";
   $("btnOeil").setAttribute("aria-label", $("btnOeil").title);
