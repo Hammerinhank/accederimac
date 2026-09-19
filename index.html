@@ -118,7 +118,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.6</button>
+    <button id="btnVersion" type="button">v2.7</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -193,8 +193,9 @@
 </dialog>
 
 <script>
-const VERSION = "2.6";
+const VERSION = "2.7";
 const HISTORIQUE = [
+  ["2.7", "19/09/2026", "Retour au jeton transmis dans un en-tête, qui le garde hors des URL, de l'historique et des journaux ; repli automatique sur le paramètre si la requête échoue. Le relais privé iCloud est désormais cité en tête des vérifications : actif, il bloque Safari sans toucher aux autres navigateurs."],
   ["2.6", "19/09/2026", "Chaque message et le bandeau d'état sont horodatés (heure, minute, seconde) : on distingue ainsi une erreur qui vient de se produire d'un affichage resté à l'écran depuis une tentative précédente. Le navigateur utilisé est indiqué dans le bandeau."],
   ["2.5", "19/09/2026", "Le jeton voyage en paramètre au lieu d'un en-tête personnalisé : les requêtes deviennent simples au sens CORS, sans contrôle préalable, ce qui débloque Safari sur iPhone. Le jeton est masqué dans les messages d'erreur."],
   ["2.4", "19/09/2026", "Petite icône œil dans le champ du jeton : un appui affiche ou masque sa valeur, pour vérifier une saisie sans la retaper."],
@@ -209,6 +210,7 @@ const $ = id => document.getElementById(id);
 let dossier = localStorage.getItem("upload_dossier") || "";
 let fichiers = [];
 let fichierOuvert = null;
+let modeParametre = false;   // repli si l'en-tête personnalisé ne passe pas
 
 // ---- Version -------------------------------------------------------------
 $("btnVersion").textContent = "v" + VERSION;
@@ -247,6 +249,7 @@ $("titreServeur").onclick = () => {
 function base() { return ($("url").value || "").trim().replace(/\/+$/, ""); }
 function jeton() { return ($("token").value || "").trim(); }
 function racine() { return ($("racine").value || "").trim(); }
+function entetes() { return { "X-Upload-Token": jeton() }; }
 function masquer(u) { return String(u).replace(/jeton=[^&]*/, "jeton=***"); }
 
 function heure() {
@@ -299,6 +302,7 @@ function bandeau(texte, classe = "") {
 }
 
 const VERIFS_RESEAU = [
+  `<b>Le relais privé iCloud est-il actif ?</b> Réglages ▸ votre nom ▸ iCloud ▸ Relais privé. Il ne s'applique qu'à Safari et fait transiter les requêtes par Apple, qui ignore votre tailnet : Safari échoue alors là où Chrome réussit. Même effet avec Réglages ▸ Safari ▸ Masquer l'adresse IP.`,
   `Le script tourne-t-il sur l'iMac ? Sa bannière doit afficher <code>Adresse : https://…:45679</code>`,
   `Le certificat Tailscale est-il encore valide ? <code>openssl x509 -enddate -noout -in /var/db/tailscale/imactavernier-2.tail78c299.ts.net.crt</code> — il se renouvelle par <code>sudo ~/go/bin/tailscale cert …</code>`,
   `L'adresse saisie est-elle bien en <code>https://</code>, avec le nom <code>.ts.net</code> et le port <code>:45679</code> ?`,
@@ -368,18 +372,34 @@ async function appel(chemin, options = {}) {
     ]);
   }
 
-  // Aucun en-tête personnalisé : la requête reste « simple » au sens CORS,
-  // donc sans contrôle préalable — c'est ce que Safari refusait d'honorer.
+  // Le jeton voyage dans un en-tête : il reste hors de l'URL, donc hors de
+  // l'historique du navigateur et des journaux. Cela impose un contrôle
+  // préalable CORS ; si l'appel échoue, on retente une fois avec le jeton en
+  // paramètre, ce qui donne une requête « simple », sans contrôle préalable.
+  const url = base() + chemin;
   const sep = chemin.includes("?") ? "&" : "?";
-  const url = base() + chemin + sep + "jeton=" + encodeURIComponent(jeton());
-  let r;
+  const urlRepli = url + sep + "jeton=" + encodeURIComponent(jeton());
+  let r = null, premiere = null;
   try {
-    r = await fetch(url, options);
+    r = modeParametre
+      ? await fetch(urlRepli, options)
+      : await fetch(url, { ...options, headers: { ...entetes(), ...(options.headers || {}) } });
   } catch (e) {
+    premiere = e;
     console.error("Échec réseau :", e);
-    throw new Panne(`Serveur injoignable — ${e.name}: ${e.message}`, VERIFS_RESEAU.concat([
-      `Un certificat expiré ou un blocage CORS produisent la même erreur : la console du navigateur le précise.`,
-    ]), masquer(url));
+    if (!modeParametre) {
+      try {
+        r = await fetch(urlRepli, options);
+        modeParametre = true;
+        console.warn("Repli : jeton transmis en paramètre.");
+      } catch (e2) { r = null; }
+    }
+  }
+  if (!r) {
+    throw new Panne(`Serveur injoignable — ${premiere.name}: ${premiere.message}`,
+      VERIFS_RESEAU.concat([
+        `Un certificat expiré ou un blocage CORS produisent la même erreur : la console du navigateur le précise.`,
+      ]), masquer(url));
   }
 
   if (options.brut) {
@@ -412,7 +432,8 @@ async function verifier(silencieux = false) {
       $("racine").value = d.racine_defaut;
       localStorage.setItem("upload_racine", d.racine_defaut);
     }
-    bandeau(`Serveur joignable — script v${d.version}`, "ok");
+    bandeau(`Serveur joignable — script v${d.version}`
+      + (modeParametre ? " (jeton en paramètre, repli)" : ""), "ok");
     if (!silencieux) {
       afficher("msgServeur", `Connexion établie avec le script v${d.version}. `
         + `Emplacements autorisés : ${(d.racines_autorisees || []).join(", ")}`, "bien");
