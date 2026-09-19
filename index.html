@@ -118,7 +118,7 @@
 
   <header>
     <h1>Fichiers de l'iMac</h1>
-    <button id="btnVersion" type="button">v2.4</button>
+    <button id="btnVersion" type="button">v2.5</button>
   </header>
 
   <div id="bandeau">Vérification du serveur…</div>
@@ -193,8 +193,9 @@
 </dialog>
 
 <script>
-const VERSION = "2.4";
+const VERSION = "2.5";
 const HISTORIQUE = [
+  ["2.5", "19/09/2026", "Le jeton voyage en paramètre au lieu d'un en-tête personnalisé : les requêtes deviennent simples au sens CORS, sans contrôle préalable, ce qui débloque Safari sur iPhone. Le jeton est masqué dans les messages d'erreur."],
   ["2.4", "19/09/2026", "Petite icône œil dans le champ du jeton : un appui affiche ou masque sa valeur, pour vérifier une saisie sans la retaper."],
   ["2.3", "19/09/2026", "Acces restreint au Bureau de l’iMac : le dossier de depot et la navigation ne peuvent plus sortir de ~/Desktop, le reste du disque est inatteignable."],
   ["2.2", "19/09/2026", "Le dossier de dépôt sur l'iMac devient un réglage de la page, à côté de l'adresse et du jeton, avec un bouton « Vérifier le dossier » (existence, droits d'écriture, création à la demande). Diagnostics réécrits pour le serveur en HTTPS direct avec le certificat Tailscale, sans tailscale serve."],
@@ -245,7 +246,7 @@ $("titreServeur").onclick = () => {
 function base() { return ($("url").value || "").trim().replace(/\/+$/, ""); }
 function jeton() { return ($("token").value || "").trim(); }
 function racine() { return ($("racine").value || "").trim(); }
-function entetes() { return { "X-Upload-Token": jeton() }; }
+function masquer(u) { return String(u).replace(/jeton=[^&]*/, "jeton=***"); }
 
 function echapper(t) {
   return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -353,19 +354,22 @@ async function appel(chemin, options = {}) {
     ]);
   }
 
-  const url = base() + chemin;
+  // Aucun en-tête personnalisé : la requête reste « simple » au sens CORS,
+  // donc sans contrôle préalable — c'est ce que Safari refusait d'honorer.
+  const sep = chemin.includes("?") ? "&" : "?";
+  const url = base() + chemin + sep + "jeton=" + encodeURIComponent(jeton());
   let r;
   try {
-    r = await fetch(url, { ...options, headers: { ...entetes(), ...(options.headers || {}) } });
+    r = await fetch(url, options);
   } catch (e) {
     console.error("Échec réseau :", e);
     throw new Panne(`Serveur injoignable — ${e.name}: ${e.message}`, VERIFS_RESEAU.concat([
       `Un certificat expiré ou un blocage CORS produisent la même erreur : la console du navigateur le précise.`,
-    ]), url);
+    ]), masquer(url));
   }
 
   if (options.brut) {
-    if (!r.ok) throw pannePour(r.status, await r.json().catch(() => null), url);
+    if (!r.ok) throw pannePour(r.status, await r.json().catch(() => null), masquer(url));
     return r;
   }
 
@@ -374,9 +378,9 @@ async function appel(chemin, options = {}) {
     if (r.ok) throw new Panne("Réponse illisible du serveur", [
       `Le serveur a répondu autre chose que du JSON.`,
       `Vérifie que l'adresse pointe bien vers le port 45679 de l'iMac.`,
-    ], url);
+    ], masquer(url));
   }
-  if (!r.ok) throw pannePour(r.status, d, url);
+  if (!r.ok) throw pannePour(r.status, d, masquer(url));
   return d;
 }
 
@@ -495,11 +499,11 @@ $("btnNouveau").onclick = async () => {
   const nom = prompt("Nom du nouveau dossier :");
   if (!nom) return;
   try {
-    const d = await appel("/creer-dossier", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ racine: racine(), dossier, nom })
-    });
+    const form = new FormData();
+    form.append("racine", racine());
+    form.append("dossier", dossier);
+    form.append("nom", nom);
+    const d = await appel("/creer-dossier", { method: "POST", body: form });
     aller(d.dossier);
   } catch (e) {
     afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), "ko");
