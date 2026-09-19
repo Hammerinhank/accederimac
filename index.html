@@ -1,18 +1,548 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Accéder à l’iMac</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fichiers de l'iMac</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#f5f5f7; color:#1d1d1f; text-align:center; padding:60px 20px; }
-  h1 { color:#0071e3; }
-  p { color:#86868b; }
+  :root{
+    --fond:#f4f6f8;
+    --carte:#ffffff;
+    --encre:#1b2331;
+    --gris:#6b7688;
+    --trait:#dce1e8;
+    --bleu:#2f5aa8;
+    --bleu-clair:#e8eef9;
+    --vert:#2c7a5b;
+    --vert-clair:#e6f3ec;
+    --rouge:#b23b36;
+    --rouge-clair:#fbeceb;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--fond);color:var(--encre);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    padding:16px 14px 48px;-webkit-text-size-adjust:100%;
+  }
+  .page{max-width:620px;margin:0 auto}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+  h1{font-size:1.35rem;font-weight:600;margin:0;letter-spacing:-.01em}
+  #btnVersion{
+    background:var(--bleu);color:#fff;border:0;border-radius:999px;
+    padding:6px 14px;font-size:.95rem;font-weight:600;cursor:pointer;flex:none;
+  }
+  #btnVersion:active{transform:translateY(1px)}
+  #bandeau{
+    border-radius:10px;padding:10px 12px;font-size:.9rem;margin-bottom:16px;
+    background:var(--bleu-clair);color:var(--bleu);
+  }
+  #bandeau.ok{background:var(--vert-clair);color:var(--vert)}
+  #bandeau.ko{background:var(--rouge-clair);color:var(--rouge)}
+  .carte{background:var(--carte);border:1px solid var(--trait);border-radius:12px;padding:16px;margin-bottom:16px}
+  .carte h2{font-size:.95rem;font-weight:600;margin:0 0 12px;color:var(--gris)}
+  .repli{cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+  label{display:block;font-size:.85rem;color:var(--gris);margin:10px 0 4px}
+  input[type=text],input[type=password]{
+    width:100%;padding:10px 12px;border:1px solid var(--trait);border-radius:8px;
+    font-size:16px;font-family:inherit;background:#fff;color:var(--encre);
+  }
+  input:focus,button:focus-visible{outline:2px solid var(--bleu);outline-offset:2px}
+  button{font-family:inherit}
+  .bouton{
+    display:inline-block;background:var(--bleu);color:#fff;border:0;border-radius:8px;
+    padding:12px 18px;font-size:1rem;font-weight:600;cursor:pointer;
+  }
+  .bouton[disabled]{background:#9aa6ba;cursor:default}
+  .bouton.secondaire{background:var(--bleu-clair);color:var(--bleu)}
+  .bouton.petit{padding:8px 12px;font-size:.9rem}
+  .barre{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .chemin{
+    font-size:.9rem;color:var(--gris);word-break:break-all;
+    background:var(--bleu-clair);border-radius:8px;padding:8px 10px;
+  }
+  .chemin a{color:var(--bleu);text-decoration:none;cursor:pointer}
+  .zone{
+    border:2px dashed var(--trait);border-radius:12px;padding:24px 16px;text-align:center;
+    background:#fff;cursor:pointer;color:var(--gris);
+  }
+  .zone.survol{border-color:var(--bleu);background:var(--bleu-clair);color:var(--bleu)}
+  .zone strong{display:block;color:var(--encre);font-size:1.05rem;margin-bottom:4px}
+  ul.liste{list-style:none;margin:12px 0 0;padding:0}
+  ul.liste li{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:10px 0;border-bottom:1px solid var(--trait);font-size:.92rem;
+  }
+  ul.liste li:last-child{border-bottom:0}
+  ul.liste .nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  ul.liste .cliquable{color:var(--bleu);cursor:pointer}
+  .meta{flex:none;font-size:.8rem;color:var(--gris)}
+  .etat{flex:none;font-size:.82rem;color:var(--gris)}
+  .etat.ok{color:var(--vert)}
+  .etat.ko{color:var(--rouge)}
+  #compteur{margin-top:12px;font-size:.9rem;color:var(--gris);min-height:1.4em}
+  .message{margin-top:10px;font-size:.88rem;color:var(--gris)}
+  .message.ko{color:var(--rouge)}
+  .message b{display:block;margin-bottom:4px}
+  .message ul{margin:4px 0 0;padding-left:20px}
+  .message li{margin-bottom:3px}
+  .message code{background:#f1f3f6;border-radius:4px;padding:1px 5px;font-size:.85em;word-break:break-all}
+  .message .appel{display:block;margin-top:6px;font-size:.8rem;color:var(--gris);word-break:break-all}
+  dialog{
+    border:0;border-radius:14px;padding:0;max-width:520px;width:calc(100% - 28px);
+    box-shadow:0 18px 50px rgba(20,28,45,.25);color:var(--encre);
+  }
+  dialog::backdrop{background:rgba(20,28,45,.45)}
+  .modale{padding:20px}
+  .modale h2{margin:0 0 14px;font-size:1.1rem;word-break:break-all}
+  .modale .v{margin-bottom:14px}
+  .modale .v b{display:block;font-size:.95rem}
+  .modale .v span{font-size:.9rem;color:var(--gris)}
+  table.attr{width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:16px}
+  table.attr td{padding:6px 0;border-bottom:1px solid var(--trait);vertical-align:top}
+  table.attr td:first-child{color:var(--gris);width:42%;padding-right:10px}
+  table.attr td:last-child{word-break:break-all}
+  .aide{font-size:.85rem;color:var(--gris);margin:6px 0 0}
 </style>
 </head>
 <body>
-<h1>Accéder à l’iMac</h1>
-<p>Nouvelle application créée avec Le Déployeur.</p>
-<p>Déploie ton code depuis l'étape 3 pour remplacer cette page.</p>
+<div class="page">
+
+  <header>
+    <h1>Fichiers de l'iMac</h1>
+    <button id="btnVersion" type="button">v2.1</button>
+  </header>
+
+  <div id="bandeau">Vérification du serveur…</div>
+
+  <section class="carte">
+    <h2 class="repli" id="titreServeur"><span>Serveur</span><span id="fleche">▾</span></h2>
+    <div id="blocServeur">
+      <label for="url">Adresse du script Python</label>
+      <input type="text" id="url" placeholder="https://imactavernier-2.xxxx.ts.net" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label for="token">Jeton d'accès</label>
+      <input type="password" id="token" placeholder="le jeton défini dans upload_server.py" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <p class="aide">Ces deux valeurs restent sur cet appareil.</p>
+      <div class="barre">
+        <button class="bouton secondaire petit" id="btnTest" type="button">Tester la connexion</button>
+      </div>
+      <div class="message" id="msgServeur"></div>
+    </div>
+  </section>
+
+  <section class="carte">
+    <h2>Dossier</h2>
+    <div class="chemin" id="chemin"></div>
+    <div class="barre">
+      <button class="bouton secondaire petit" id="btnActualiser" type="button">Actualiser</button>
+      <button class="bouton secondaire petit" id="btnNouveau" type="button">Nouveau dossier</button>
+    </div>
+    <ul class="liste" id="contenu"></ul>
+    <div class="message" id="msgDossier"></div>
+  </section>
+
+  <section class="carte">
+    <h2>Déposer des fichiers ici</h2>
+    <div class="zone" id="zone">
+      <strong>Choisir des fichiers</strong>
+      ou les déposer ici
+    </div>
+    <input type="file" id="champ" multiple hidden>
+    <ul class="liste" id="aEnvoyer"></ul>
+    <div id="compteur"></div>
+    <div class="barre">
+      <button class="bouton" id="btnEnvoyer" type="button" disabled>Envoyer</button>
+    </div>
+    <div class="message" id="msgEnvoi"></div>
+  </section>
+
+</div>
+
+<dialog id="dlgVersion">
+  <div class="modale">
+    <h2>Historique des versions</h2>
+    <div id="histo"></div>
+    <button class="bouton secondaire" type="button" onclick="document.getElementById('dlgVersion').close()">Fermer</button>
+  </div>
+</dialog>
+
+<dialog id="dlgFichier">
+  <div class="modale">
+    <h2 id="titreFichier"></h2>
+    <table class="attr"><tbody id="attrs"></tbody></table>
+    <div class="barre" style="margin-top:0">
+      <button class="bouton" id="btnTelecharger" type="button">Télécharger sur cet appareil</button>
+      <button class="bouton secondaire" type="button" onclick="document.getElementById('dlgFichier').close()">Fermer</button>
+    </div>
+    <div class="message" id="msgFichier"></div>
+  </div>
+</dialog>
+
+<script>
+const VERSION = "2.1";
+const HISTORIQUE = [
+  ["2.1", "19/09/2026", "Diagnostic détaillé : chaque échec indique la cause probable et la liste des vérifications à faire (script arrêté, tailscale serve inactif, adresse en http bloquée, jeton refusé, route absente, fichier trop gros…), avec l'URL appelée. Bandeau d'état du serveur au chargement de la page."],
+  ["2.0", "19/09/2026", "Choix du dossier de dépôt : navigation dans l'arborescence de l'iMac, création de sous-dossiers, liste du contenu. Un clic sur un fichier affiche tous ses attributs et permet de le télécharger sur l'appareil qui consulte la page."],
+  ["1.0", "19/09/2026", "Version initiale : réglage du serveur et du jeton (mémorisés localement), test de connexion, sélection ou dépôt de fichiers, envoi un par un avec état et décompte de progression."]
+];
+
+const PORT_ATTENDU = 45679;
+const $ = id => document.getElementById(id);
+let dossier = localStorage.getItem("upload_dossier") || "";
+let fichiers = [];
+let fichierOuvert = null;
+
+// ---- Version -------------------------------------------------------------
+$("btnVersion").textContent = "v" + VERSION;
+$("histo").innerHTML = HISTORIQUE.map(([v, d, t]) =>
+  `<div class="v"><b>v${v} — ${d}</b><span>${t}</span></div>`).join("");
+$("btnVersion").onclick = () => $("dlgVersion").showModal();
+
+// ---- Réglages ------------------------------------------------------------
+$("url").value = localStorage.getItem("upload_url") || "";
+$("token").value = localStorage.getItem("upload_token") || "";
+$("url").oninput = e => localStorage.setItem("upload_url", e.target.value.trim());
+$("token").oninput = e => localStorage.setItem("upload_token", e.target.value.trim());
+
+$("titreServeur").onclick = () => {
+  const bloc = $("blocServeur");
+  const cache = bloc.style.display === "none";
+  bloc.style.display = cache ? "" : "none";
+  $("fleche").textContent = cache ? "▾" : "▸";
+};
+
+function base() { return ($("url").value || "").trim().replace(/\/+$/, ""); }
+function jeton() { return ($("token").value || "").trim(); }
+function entetes() { return { "X-Upload-Token": jeton() }; }
+
+function echapper(t) {
+  return String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function poids(o) {
+  return o < 1024 ? o + " o"
+    : o < 1048576 ? (o / 1024).toFixed(0) + " Ko"
+    : o < 1073741824 ? (o / 1048576).toFixed(1) + " Mo"
+    : (o / 1073741824).toFixed(2) + " Go";
+}
+
+// ---- Diagnostic ----------------------------------------------------------
+class Panne extends Error {
+  constructor(titre, pistes = [], url = "") {
+    super(titre);
+    this.titre = titre;
+    this.pistes = pistes;
+    this.url = url;
+  }
+}
+
+function afficher(cible, contenu, erreur = false) {
+  const e = $(cible);
+  e.className = "message" + (erreur ? " ko" : "");
+  if (contenu instanceof Panne) {
+    e.innerHTML = `<b>${echapper(contenu.titre)}</b>`
+      + (contenu.pistes.length ? "<ul>" + contenu.pistes.map(p => `<li>${p}</li>`).join("") + "</ul>" : "")
+      + (contenu.url ? `<span class="appel">Appel : ${echapper(contenu.url)}</span>` : "");
+  } else {
+    e.textContent = contenu;
+  }
+}
+
+function bandeau(texte, classe = "") {
+  $("bandeau").className = classe;
+  $("bandeau").innerHTML = texte;
+}
+
+const VERIFS_RESEAU = [
+  `Le script tourne-t-il sur l'iMac ? <code>./upload_service.sh status</code>`,
+  `Le relais https est-il actif ? <code>tailscale serve status</code> doit montrer le port ${PORT_ATTENDU}`,
+  `L'adresse saisie est-elle exactement celle affichée par cette commande (en <code>https://</code>, sans numéro de port) ?`,
+  `Tailscale est-il connecté sur cet appareil, et l'iMac est-il allumé et non endormi ?`,
+  `Dans <code>upload_server.py</code>, la liste <code>ORIGINES</code> contient-elle <code>${location.origin}</code> ?`,
+];
+
+function pannePour(statut, donnees, url) {
+  const dit = donnees && donnees.erreur ? donnees.erreur : "";
+  switch (statut) {
+    case 403:
+      return new Panne("Jeton refusé (403)", [
+        `Le serveur répond, mais le jeton ne correspond pas.`,
+        `Compare le champ « Jeton d'accès » avec la variable <code>JETON</code> en haut de <code>upload_server.py</code>.`,
+        `Attention aux espaces avant/après et à la correction automatique du clavier.`,
+        `Après modification du script, relance-le : <code>./upload_service.sh stop</code> puis <code>start</code>.`,
+      ], url);
+    case 404:
+      return new Panne(dit ? `Introuvable (404) : ${dit}` : "Adresse inconnue du serveur (404)", [
+        `Si c'est un fichier ou un dossier : il a pu être déplacé ou supprimé, clique sur « Actualiser ».`,
+        `Sinon le script Python est sans doute en v1.0 : remplace-le par <code>upload_server.py</code> v2.0 et relance-le.`,
+      ], url);
+    case 409:
+      return new Panne(dit || "Ce dossier existe déjà (409)", [`Choisis un autre nom.`], url);
+    case 413:
+      return new Panne(dit || "Fichier trop volumineux (413)", [
+        `Augmente <code>TAILLE_MAX_MO</code> dans <code>upload_server.py</code> puis relance le script.`,
+      ], url);
+    case 415:
+      return new Panne(dit || "Type de fichier refusé (415)", [
+        `Le réglage <code>EXTENSIONS</code> du script n'autorise pas cette extension.`,
+      ], url);
+    case 500:
+      return new Panne("Erreur interne du serveur (500)", [
+        `Regarde le journal sur l'iMac : <code>./upload_service.sh log</code>`,
+        `Souvent : droits insuffisants sur le dossier, ou disque plein.`,
+      ], url);
+    default:
+      return new Panne(dit ? `${dit} (${statut})` : `Réponse inattendue du serveur (${statut})`, [
+        `Consulte le journal : <code>./upload_service.sh log</code>`,
+      ], url);
+  }
+}
+
+// Point d'entrée unique de tous les appels : garantit un diagnostic identique partout.
+async function appel(chemin, options = {}) {
+  if (!base()) {
+    throw new Panne("Adresse du serveur non renseignée", [
+      `Ouvre la section « Serveur » et colle l'adresse donnée par <code>tailscale serve status</code> sur l'iMac.`,
+    ]);
+  }
+  if (!/^https:\/\//i.test(base())) {
+    throw new Panne("L'adresse doit commencer par https://", [
+      `Cette page est servie en https : le navigateur bloque tout appel vers <code>http://</code> ou vers une IP Tailscale brute (contenu mixte).`,
+      `Lance <code>tailscale serve --bg ${PORT_ATTENDU}</code> sur l'iMac, puis utilise l'adresse en <code>.ts.net</code> qu'affiche <code>tailscale serve status</code>.`,
+    ]);
+  }
+  if (!jeton()) {
+    throw new Panne("Jeton d'accès non renseigné", [
+      `Recopie la valeur de <code>JETON</code> définie en haut de <code>upload_server.py</code>.`,
+    ]);
+  }
+
+  const url = base() + chemin;
+  let r;
+  try {
+    r = await fetch(url, { ...options, headers: { ...entetes(), ...(options.headers || {}) } });
+  } catch (e) {
+    console.error("Échec réseau :", e);
+    throw new Panne(`Serveur injoignable — ${e.name}: ${e.message}`, VERIFS_RESEAU.concat([
+      `Un blocage CORS produit exactement la même erreur : la console du navigateur le précise.`,
+    ]), url);
+  }
+
+  if (options.brut) {
+    if (!r.ok) throw pannePour(r.status, await r.json().catch(() => null), url);
+    return r;
+  }
+
+  let d = null;
+  try { d = await r.json(); } catch (e) {
+    if (r.ok) throw new Panne("Réponse illisible du serveur", [
+      `Le serveur a répondu autre chose que du JSON (page d'erreur de Tailscale ?).`,
+      `Vérifie que l'adresse pointe bien vers le port ${PORT_ATTENDU}.`,
+    ], url);
+  }
+  if (!r.ok) throw pannePour(r.status, d, url);
+  return d;
+}
+
+// ---- État du serveur -----------------------------------------------------
+async function verifier(silencieux = false) {
+  bandeau("Vérification du serveur…");
+  try {
+    const d = await appel("/version");
+    bandeau(`Serveur joignable — script v${d.version}, racine <code>${echapper(d.racine)}</code>`, "ok");
+    if (!silencieux) afficher("msgServeur", `Connexion établie avec le script v${d.version}.`);
+    if (d.version !== VERSION.split(".")[0] + "." + "0" && d.version < "2.0") {
+      bandeau(`Serveur joignable mais script en v${d.version} : la navigation et le téléchargement exigent la v2.0.`, "ko");
+    }
+    return true;
+  } catch (e) {
+    const p = e instanceof Panne ? e : new Panne(String(e));
+    bandeau(`Serveur indisponible — ${echapper(p.titre)}. Détail ci-dessous.`, "ko");
+    afficher("msgServeur", p, true);
+    $("blocServeur").style.display = "";
+    $("fleche").textContent = "▾";
+    return false;
+  }
+}
+
+$("btnTest").onclick = async () => { if (await verifier()) charger(); };
+
+// ---- Navigation dans les dossiers ---------------------------------------
+function dessinerChemin() {
+  const morceaux = dossier ? dossier.split("/") : [];
+  let cumul = "";
+  let html = `<a onclick="aller('')">racine</a>`;
+  for (const m of morceaux) {
+    cumul = cumul ? cumul + "/" + m : m;
+    html += ` / <a onclick="aller('${cumul.replace(/'/g, "\\'")}')">${echapper(m)}</a>`;
+  }
+  $("chemin").innerHTML = html;
+}
+
+function aller(chemin) {
+  dossier = chemin;
+  localStorage.setItem("upload_dossier", dossier);
+  charger();
+}
+
+async function charger() {
+  dessinerChemin();
+  afficher("msgDossier", "Lecture du dossier…");
+  try {
+    const d = await appel("/liste?dossier=" + encodeURIComponent(dossier));
+    const parent = dossier.includes("/") ? dossier.slice(0, dossier.lastIndexOf("/")) : "";
+    let html = "";
+    if (dossier) {
+      html += `<li><span class="nom cliquable" onclick="aller('${parent.replace(/'/g, "\\'")}')">⬅︎ dossier parent</span><span class="meta"></span></li>`;
+    }
+    for (const dd of d.dossiers) {
+      const cible = ((dossier ? dossier + "/" : "") + dd.nom).replace(/'/g, "\\'");
+      html += `<li><span class="nom cliquable" onclick="aller('${cible}')">📁 ${echapper(dd.nom)}</span><span class="meta">${dd.modifie}</span></li>`;
+    }
+    for (const f of d.fichiers) {
+      html += `<li><span class="nom cliquable" onclick="ouvrir('${f.nom.replace(/'/g, "\\'")}')">${echapper(f.nom)}</span><span class="meta">${poids(f.taille)}</span></li>`;
+    }
+    $("contenu").innerHTML = html || `<li><span class="nom">Dossier vide</span></li>`;
+    afficher("msgDossier", `${d.nb_dossiers} dossier(s), ${d.nb_fichiers} fichier(s).`);
+  } catch (e) {
+    $("contenu").innerHTML = "";
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+  }
+}
+
+$("btnActualiser").onclick = charger;
+
+$("btnNouveau").onclick = async () => {
+  const nom = prompt("Nom du nouveau dossier :");
+  if (!nom) return;
+  try {
+    const d = await appel("/creer-dossier", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dossier, nom })
+    });
+    aller(d.dossier);
+  } catch (e) {
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+  }
+};
+
+// ---- Attributs et téléchargement ----------------------------------------
+async function ouvrir(nom) {
+  try {
+    const d = await appel("/infos?dossier=" + encodeURIComponent(dossier)
+      + "&nom=" + encodeURIComponent(nom));
+    fichierOuvert = nom;
+    $("titreFichier").textContent = d.nom;
+    const lignes = [
+      ["Emplacement", d.chemin],
+      ["Taille", `${poids(d.taille)} (${d.taille.toLocaleString("fr-FR")} octets)`],
+      ["Type", d.type_mime],
+      ["Extension", d.extension],
+      ["Créé le", d.cree],
+      ["Modifié le", d.modifie],
+      ["Ouvert le", d.accede],
+      ["Droits", `${d.droits} (${d.droits_octal})`],
+      ["Propriétaire", `${d.proprietaire} : ${d.groupe}`],
+      ["Liens", d.liens],
+    ];
+    $("attrs").innerHTML = lignes.map(([k, v]) =>
+      `<tr><td>${k}</td><td>${echapper(v)}</td></tr>`).join("");
+    afficher("msgFichier", "");
+    $("dlgFichier").showModal();
+  } catch (e) {
+    afficher("msgDossier", e instanceof Panne ? e : new Panne(String(e)), true);
+  }
+}
+
+$("btnTelecharger").onclick = async () => {
+  if (!fichierOuvert) return;
+  $("btnTelecharger").disabled = true;
+  afficher("msgFichier", "Téléchargement en cours…");
+  try {
+    const r = await appel("/telecharger?dossier=" + encodeURIComponent(dossier)
+      + "&nom=" + encodeURIComponent(fichierOuvert), { brut: true });
+    const blob = await r.blob();
+    const lien = document.createElement("a");
+    lien.href = URL.createObjectURL(blob);
+    lien.download = fichierOuvert;
+    document.body.appendChild(lien);
+    lien.click();
+    lien.remove();
+    setTimeout(() => URL.revokeObjectURL(lien.href), 30000);
+    afficher("msgFichier", "Fichier récupéré. Sur iPhone, il est enregistré dans Fichiers ▸ Téléchargements.");
+  } catch (e) {
+    afficher("msgFichier", e instanceof Panne ? e : new Panne(String(e)), true);
+  }
+  $("btnTelecharger").disabled = false;
+};
+
+// ---- Sélection et envoi --------------------------------------------------
+const zone = $("zone");
+zone.onclick = () => $("champ").click();
+$("champ").onchange = e => ajouter(e.target.files);
+
+["dragenter", "dragover"].forEach(ev => zone.addEventListener(ev, e => {
+  e.preventDefault(); zone.classList.add("survol");
+}));
+["dragleave", "drop"].forEach(ev => zone.addEventListener(ev, e => {
+  e.preventDefault(); zone.classList.remove("survol");
+}));
+zone.addEventListener("drop", e => ajouter(e.dataTransfer.files));
+
+function ajouter(liste) {
+  for (const f of liste) {
+    if (!fichiers.some(x => x.fichier.name === f.name && x.fichier.size === f.size)) {
+      fichiers.push({ fichier: f, etat: "en attente", classe: "" });
+    }
+  }
+  dessinerEnvoi();
+}
+
+function dessinerEnvoi() {
+  $("aEnvoyer").innerHTML = fichiers.map(f =>
+    `<li><span class="nom">${echapper(f.fichier.name)}</span><span class="etat ${f.classe}">${echapper(f.etat)}</span></li>`
+  ).join("");
+  $("btnEnvoyer").disabled = fichiers.length === 0;
+}
+
+$("btnEnvoyer").onclick = async () => {
+  const total = fichiers.length;
+  $("btnEnvoyer").disabled = true;
+  afficher("msgEnvoi", "");
+  let envoyes = 0, echecs = 0, derniere = null;
+
+  for (let i = 0; i < total; i++) {
+    const item = fichiers[i];
+    item.etat = "envoi…"; item.classe = ""; dessinerEnvoi();
+    $("compteur").textContent = `Envoi ${i + 1} / ${total} — ${total - i - 1} restant(s)`;
+
+    const form = new FormData();
+    form.append("fichier", item.fichier);
+    form.append("dossier", dossier);
+    try {
+      await appel("/upload", { method: "POST", body: form });
+      envoyes++;
+      item.etat = "déposé (" + poids(item.fichier.size) + ")";
+      item.classe = "ok";
+    } catch (e) {
+      echecs++;
+      derniere = e instanceof Panne ? e : new Panne(String(e));
+      item.etat = derniere.titre.length > 40 ? derniere.titre.slice(0, 38) + "…" : derniere.titre;
+      item.classe = "ko";
+    }
+    dessinerEnvoi();
+  }
+
+  $("compteur").textContent = `Terminé : ${envoyes} / ${total} déposé(s)` +
+    (echecs ? `, ${echecs} en échec` : "") + ` dans ${dossier || "racine"}.`;
+  if (derniere) afficher("msgEnvoi", derniere, true);
+  $("btnEnvoyer").disabled = false;
+  if (envoyes) charger();
+};
+
+// ---- Démarrage -----------------------------------------------------------
+dessinerChemin();
+verifier(true).then(ok => { if (ok) charger(); });
+</script>
 </body>
 </html>
